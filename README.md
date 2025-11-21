@@ -5,8 +5,6 @@ This program watches the `klipper` clipboard for KDE/Plasma desktop setups and c
 
 ## TODO
 
-* Remove the --config option - path of config file should just come
-  from XDG standards for config files.
 * Upgrade zbus version to 5.x and port code as necessary.
 * Review Cursor-generated code, clean-up and refactor as needed.
 * Add --daemonize option with path to log file as arg.

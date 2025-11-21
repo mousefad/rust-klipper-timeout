@@ -16,10 +16,6 @@ use zbus::{Connection, Proxy, ProxyBuilder, proxy::SignalStream};
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Time-based clipboard expiry for Klipper", long_about = None)]
 struct Cli {
-    /// Optional path to a TOML config file (defaults to ~/.config/klipper-timeout/config.toml)
-    #[arg(long)]
-    config: Option<PathBuf>,
-
     /// Seconds before a clipboard entry is purged
     #[arg(long)]
     expiry_seconds: Option<u64>,
@@ -280,17 +276,17 @@ impl<'conn> ClipboardDaemon<'conn> {
     }
 }
 
-fn default_config_path(cli_path: Option<&PathBuf>) -> Option<PathBuf> {
-    if let Some(path) = cli_path {
-        return Some(path.clone());
-    }
-    config_dir().map(|dir| dir.join("klipper-timeout").join("config.toml"))
+fn default_config_path() -> Option<PathBuf> {
+    config_dir().map(|dir| dir.join("klipper-timeout.toml"))
 }
 
-fn load_config(cli_path: Option<&PathBuf>) -> Result<Option<FileConfig>> {
-    let path = match default_config_path(cli_path) {
+fn load_config() -> Result<Option<FileConfig>> {
+    let path = match default_config_path() {
         Some(path) => path,
-        None => return Ok(None),
+        None => {
+            warn!("could not determine path config file");
+            return Ok(None)
+        },
     };
 
     if !path.exists() {
@@ -330,7 +326,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(cli.verbose).context("initializing logging")?;
 
-    let file_cfg = load_config(cli.config.as_ref())?;
+    let file_cfg = load_config()?;
     let config = Config::from_sources(file_cfg, &cli)?;
 
     let connection = Connection::session()
