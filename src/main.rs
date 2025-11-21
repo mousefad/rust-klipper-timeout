@@ -11,7 +11,7 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use tokio::time;
 use tracing::{debug, error, info, warn};
-use zbus::{Connection, Proxy, ProxyBuilder, proxy::SignalStream};
+use zbus::{Connection, Proxy, proxy::SignalStream};
 
 /// Monitor the Klipper clipboard history and expire items after some 
 /// time. Configuration is read from `klipper-timeout.toml` found in 
@@ -94,12 +94,12 @@ struct KlipperProxy<'conn> {
 
 impl<'conn> KlipperProxy<'conn> {
     async fn new(connection: &'conn Connection) -> zbus::Result<Self> {
-        let proxy = ProxyBuilder::new(connection)
-            .destination("org.kde.klipper")?
-            .path("/klipper")?
-            .interface("org.kde.klipper.klipper")?
-            .build()
-            .await?;
+        let proxy = Proxy::new(
+            connection,
+            "org.kde.klipper",
+            "/klipper",
+            "org.kde.klipper.klipper",
+        ).await?;
         Ok(Self { inner: proxy })
     }
 
