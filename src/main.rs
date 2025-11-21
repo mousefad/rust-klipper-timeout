@@ -13,8 +13,15 @@ use tokio::time;
 use tracing::{debug, error, info, warn};
 use zbus::{Connection, Proxy, ProxyBuilder, proxy::SignalStream};
 
+/// Monitor the Klipper clipboard history and expire items after some 
+/// time. Configuration is read from `klipper-timeout.toml` found in 
+/// `$XDG_CONFIG_HOME`` (or `~/.config` if env var not set).
+/// 
+/// The configuration file file has two settings: `expiry_seconds`, and 
+/// `resync_interval_seconds`, both of which accept an integer value, 
+/// and may be over-ridden using command line options.
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Time-based clipboard expiry for Klipper", long_about = None)]
+#[command(version)]
 struct Cli {
     /// Seconds before a clipboard entry is purged
     #[arg(long)]
@@ -24,7 +31,7 @@ struct Cli {
     #[arg(long)]
     resync_interval_seconds: Option<u64>,
 
-    /// Logging verbosity (can provide more than once)
+    /// Log more verbosely. Use up to three times for increasingly verbose output.
     #[arg(long, short, action = clap::ArgAction::Count)]
     verbose: u8,
 }
@@ -306,9 +313,10 @@ fn load_config() -> Result<Option<FileConfig>> {
 fn init_tracing(verbose: u8) -> Result<()> {
 
     let log_level = match verbose {
-        0 => "info",
-        1 => "debug",
-        2 => "trace",
+        0 => "warn",
+        1 => "info",
+        2 => "debug",
+        3 => "trace",
         _ => {
             info!("already at maximum --verbose level");
             "trace"
