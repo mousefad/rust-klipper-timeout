@@ -21,6 +21,5 @@ resync_interval_seconds = 10
 
 ## TODO
 
-* Upgrade zbus version to 5.x and port code as necessary.
 * Feature: immediately filter out items from the history that match 
   certain patterns (e.g. crypto keys)
