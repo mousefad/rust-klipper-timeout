@@ -28,9 +28,9 @@ struct Cli {
     #[arg(long)]
     resync_interval_seconds: Option<u64>,
 
-    /// Tracing/ logging directives (e.g. info,debug,trace)
-    #[arg(long)]
-    log_level: Option<String>,
+    /// Logging verbosity (can provide more than once)
+    #[arg(long, short, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -307,15 +307,20 @@ fn load_config(cli_path: Option<&PathBuf>) -> Result<Option<FileConfig>> {
     Ok(Some(parsed))
 }
 
-fn init_tracing(log_level: Option<&str>) -> Result<()> {
-    use tracing_subscriber::{EnvFilter, fmt};
+fn init_tracing(verbose: u8) -> Result<()> {
 
-    let env_filter = if let Some(level) = log_level {
-        EnvFilter::try_new(level)?
-    } else {
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+    let log_level = match verbose {
+        0 => "info",
+        1 => "debug",
+        2 => "trace",
+        _ => {
+            info!("already at maximum --verbose level");
+            "trace"
+        },
     };
 
+    use tracing_subscriber::{EnvFilter, fmt};
+    let env_filter = EnvFilter::try_new(log_level)?;
     fmt().with_env_filter(env_filter).init();
     Ok(())
 }
@@ -323,7 +328,7 @@ fn init_tracing(log_level: Option<&str>) -> Result<()> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    init_tracing(cli.log_level.as_deref()).context("initializing logging")?;
+    init_tracing(cli.verbose).context("initializing logging")?;
 
     let file_cfg = load_config(cli.config.as_ref())?;
     let config = Config::from_sources(file_cfg, &cli)?;

@@ -5,7 +5,6 @@ This program watches the `klipper` clipboard for KDE/Plasma desktop setups and c
 
 ## TODO
 
-* Replace `--log-level *level*` with counted `--debug`.
 * Remove the --config option - path of config file should just come
   from XDG standards for config files.
 * Upgrade zbus version to 5.x and port code as necessary.
