@@ -16,7 +16,7 @@ use zbus::{Connection, Proxy, ProxyBuilder, proxy::SignalStream};
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Time-based clipboard expiry for Klipper", long_about = None)]
 struct Cli {
-    /// Optional path to a TOML config file (defaults to ~/.config/clipt/config.toml)
+    /// Optional path to a TOML config file (defaults to ~/.config/klipper-timeout/config.toml)
     #[arg(long)]
     config: Option<PathBuf>,
 
@@ -46,10 +46,12 @@ struct Config {
 }
 
 impl Config {
-    const DEFAULT_EXPIRY: Duration = Duration::from_secs(15 * 60);
+    const DEFAULT_EXPIRY: Duration = Duration::from_secs(10 * 60);
     const DEFAULT_RESYNC: Duration = Duration::from_secs(30);
 
     fn from_sources(file: Option<FileConfig>, cli: &Cli) -> Result<Self> {
+        debug!("CLI Options: {:?}, cli", cli);
+        debug!("File Config: {:?}, file", file);
         let file = file.unwrap_or_default();
 
         let expiry_secs = cli
@@ -68,10 +70,12 @@ impl Config {
             bail!("resync_interval_seconds must be greater than zero");
         }
 
-        Ok(Self {
+        let config = Self{
             expiry: Duration::from_secs(expiry_secs),
             resync: Duration::from_secs(resync_secs),
-        })
+        };
+        debug!("Use Config:  {:?}", config);
+        Ok(config)
     }
 }
 
@@ -234,6 +238,7 @@ impl<'conn> ClipboardDaemon<'conn> {
             return Ok(());
         }
 
+        // Why create a copy insead of just using from struct?
         let expiry = self.config.expiry;
         let mut changed = false;
 
@@ -279,7 +284,7 @@ fn default_config_path(cli_path: Option<&PathBuf>) -> Option<PathBuf> {
     if let Some(path) = cli_path {
         return Some(path.clone());
     }
-    config_dir().map(|dir| dir.join("clipt").join("config.toml"))
+    config_dir().map(|dir| dir.join("klipper-timeout").join("config.toml"))
 }
 
 fn load_config(cli_path: Option<&PathBuf>) -> Result<Option<FileConfig>> {
@@ -289,7 +294,10 @@ fn load_config(cli_path: Option<&PathBuf>) -> Result<Option<FileConfig>> {
     };
 
     if !path.exists() {
+        debug!("Config file does not exist: {:?}", path);
         return Ok(None);
+    } else {
+        debug!("Reading from config file: {:?}", path);
     }
 
     let content = fs::read_to_string(&path)
