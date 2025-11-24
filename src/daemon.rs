@@ -4,47 +4,33 @@ use anyhow::{Context, Result};
 use futures_util::StreamExt;
 use tokio::time;
 use tracing::{debug, error, info, warn};
-use zbus::{Connection, Proxy, proxy::SignalStream};
+use zbus::{Connection, proxy};
 
 use crate::config::Config;
+
+#[proxy(
+    interface = "org.kde.klipper.klipper",
+    default_service = "org.kde.klipper",
+    default_path = "/klipper"
+)]
+pub trait Klipper {
+    #[zbus(name = "getClipboardHistoryMenu")]
+    async fn get_clipboard_history(&self) -> zbus::Result<Vec<String>>;
+
+    #[zbus(name = "clearClipboardHistory")]
+    async fn clear_clipboard_history(&self) -> zbus::Result<()>;
+
+    #[zbus(name = "setClipboardContents")]
+    async fn set_clipboard_contents(&self, contents: &str) -> zbus::Result<()>;
+
+    #[zbus(signal, name = "clipboardHistoryUpdated")]
+    fn clipboard_history_updated(&self) -> zbus::Result<()>;
+}
 
 #[derive(Debug, Clone)]
 struct TrackedEntry {
     content: String,
     first_seen: Instant,
-}
-
-pub struct KlipperProxy<'conn> {
-    inner: Proxy<'conn>,
-}
-
-impl<'conn> KlipperProxy<'conn> {
-    pub async fn new(connection: &'conn Connection) -> zbus::Result<Self> {
-        let proxy = Proxy::new(
-            connection,
-            "org.kde.klipper",
-            "/klipper",
-            "org.kde.klipper.klipper",
-        )
-        .await?;
-        Ok(Self { inner: proxy })
-    }
-
-    async fn get_clipboard_history(&self) -> zbus::Result<Vec<String>> {
-        self.inner.call("getClipboardHistoryMenu", &()).await
-    }
-
-    async fn clear_clipboard_history(&self) -> zbus::Result<()> {
-        self.inner.call("clearClipboardHistory", &()).await
-    }
-
-    async fn set_clipboard_contents(&self, contents: &str) -> zbus::Result<()> {
-        self.inner.call("setClipboardContents", &(contents,)).await
-    }
-
-    async fn receive_clipboard_history_updated(&self) -> zbus::Result<SignalStream<'conn>> {
-        self.inner.receive_signal("clipboardHistoryUpdated").await
-    }
 }
 
 pub struct ClipboardDaemon<'conn> {
@@ -54,7 +40,10 @@ pub struct ClipboardDaemon<'conn> {
 }
 
 impl<'conn> ClipboardDaemon<'conn> {
-    pub async fn new(config: Config, proxy: KlipperProxy<'conn>) -> Result<Self> {
+    pub async fn new(config: Config, connection: &'conn Connection) -> Result<Self> {
+        let proxy = KlipperProxy::new(connection)
+            .await
+            .context("creating Klipper D-Bus proxy")?;
         let mut daemon = Self {
             config,
             proxy,
@@ -71,7 +60,11 @@ impl<'conn> ClipboardDaemon<'conn> {
             "starting clipboard expiry daemon"
         );
 
-        let mut history_stream = match self.proxy.receive_clipboard_history_updated().await {
+        let mut history_stream: Option<clipboardHistoryUpdatedStream> = match self
+            .proxy
+            .receive_clipboard_history_updated()
+            .await
+        {
             Ok(stream) => Some(stream),
             Err(err) => {
                 warn!(
