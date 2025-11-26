@@ -125,16 +125,27 @@ impl<'conn> ClipboardDaemon<'conn> {
             .await
             .context("fetching clipboard history from Klipper")?;
 
-        self.reconcile(history);
+        let changed = self.reconcile(history);
+        if changed {
+            self.rewrite_history()
+                .await
+                .context("rewriting clipboard history after filtering")?;
+        }
         Ok(())
     }
 
-    fn reconcile(&mut self, history: Vec<String>) {
+    fn reconcile(&mut self, history: Vec<String>) -> bool {
         let mut matched = vec![false; self.entries.len()];
         let mut next = Vec::with_capacity(history.len());
         let now = Instant::now();
+        let mut filtered = false;
 
         for content in history {
+            if self.config.should_always_remove(&content) {
+                info!("removing clipboard entry that matches always_remove_patterns");
+                filtered = true;
+                continue;
+            }
             if let Some((idx, entry)) = self
                 .entries
                 .iter()
@@ -153,6 +164,7 @@ impl<'conn> ClipboardDaemon<'conn> {
         }
 
         self.entries = next;
+        filtered
     }
 
     async fn expire_due_entries(&mut self) -> Result<()> {
@@ -165,6 +177,10 @@ impl<'conn> ClipboardDaemon<'conn> {
 
         self.entries.retain(|entry| {
             let expired = entry.first_seen.elapsed() >= expiry;
+            if expired && self.config.should_never_remove(&entry.content) {
+                debug!("skipping expiry for clipboard entry that matches never_remove_patterns");
+                return true;
+            }
             if expired {
                 info!(
                     age = ?entry.first_seen.elapsed(),
